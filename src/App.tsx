@@ -71,6 +71,15 @@ function App() {
 
   const [propertyData, setPropertyData] = useState<PropertyData | null>(null);
   const [isWaitingForResults, setIsWaitingForResults] = useState(false);
+  const [history, setHistory] = useState<Array<{ id: string; createdAt: number; parcelId?: string; county?: string; state?: string; summary?: string }>>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [currentRequestId, setCurrentRequestId] = useState<string | null>(null);
+
+  async function getJSON(url: string) {
+    const r = await fetch(`${url}${url.includes('?') ? '&' : '?'}ts=${Date.now()}`, { cache: 'no-store' });
+    if (!r.ok) return null;
+    return r.json();
+    }
 
   const counties = [
     'Marion',
@@ -119,6 +128,10 @@ function App() {
     
     setIsWaitingForResults(true);
     setPropertyData(null);
+    setSelectedId(null);
+
+    const requestId = (crypto?.randomUUID?.() || Math.random().toString(36).slice(2)) + Date.now().toString(36);
+    setCurrentRequestId(requestId);
 
     try {
       const webhookUrl = 'https://public.lindy.ai/api/v1/webhooks/lindy/bd98b1a4-c701-4188-a1da-6591410e2cc0';
@@ -135,6 +148,7 @@ function App() {
           address: formData.address || undefined,
           county: formData.county || undefined,
           state: formData.state || undefined,
+          requestId,
           callbackUrl: `${window.location.origin}/api/webhook-response`
         })
       });
@@ -169,32 +183,140 @@ function App() {
     }
   };
 
+  const handleClearResults = async () => {
+    try {
+      if (currentRequestId) {
+        await fetch(`/api/webhook-response?requestId=${encodeURIComponent(currentRequestId)}`, { method: 'DELETE' });
+      } else {
+        await fetch('/api/webhook-response', { method: 'DELETE' });
+      }
+      setPropertyData(null);
+      setIsWaitingForResults(false);
+      setSelectedId(null);
+      setCurrentRequestId(null);
+    } catch (error) {
+      console.error('Error clearing results:', error);
+    }
+  };
+
+  const refreshResults = async () => {
+    try {
+      if (!currentRequestId) return;
+      const data = await getJSON(`/api/webhook-response?requestId=${encodeURIComponent(currentRequestId)}`);
+      if (data && Object.keys(data).length > 0) {
+        if (
+          data.property_basics ||
+          data.assessed_value_info ||
+          data.commercial_details ||
+          data.owner_information ||
+          data.zoning_info
+        ) {
+          setPropertyData(data);
+        } else {
+          setPropertyData({ raw: data });
+        }
+        setIsWaitingForResults(false);
+      }
+    } catch (error) {
+      console.error('Error refreshing results:', error);
+    }
+  };
+
+  const fetchHistory = async () => {
+    const data = await getJSON('/api/history');
+    if (Array.isArray(data)) setHistory(data);
+  };
+
+  const handleViewHistory = async (id: string) => {
+    const data = await getJSON(`/api/history/${id}`);
+    if (data) {
+      const payload = data.payload;
+      if (
+        payload && (
+          payload.property_basics ||
+          payload.assessed_value_info ||
+          payload.commercial_details ||
+          payload.owner_information ||
+          payload.zoning_info
+        )
+      ) {
+        setPropertyData(payload);
+      } else if (payload) {
+        setPropertyData({ raw: payload });
+      } else {
+        setPropertyData(null);
+      }
+      setSelectedId(id);
+      setIsWaitingForResults(false);
+      setCurrentRequestId(null);
+    }
+  };
+
+  const handleDeleteHistory = async (id: string) => {
+    await fetch(`/api/history/${id}`, { method: 'DELETE' });
+    if (id === selectedId) {
+      setSelectedId(null);
+      setPropertyData(null);
+    }
+    fetchHistory();
+  };
+
   // Poll for property data updates
   useEffect(() => {
     const checkForResults = async () => {
-      try {
-        const response = await fetch('/api/webhook-response');
-        if (response.ok) {
-          const data = await response.json();
-          if (data && Object.keys(data).length > 0) {
-            setPropertyData(data);
-            setIsWaitingForResults(false);
-          }
+      const id = currentRequestId;
+      if (!id) return;
+      const data = await getJSON(`/api/webhook-response?requestId=${encodeURIComponent(id)}`);
+      if (id !== currentRequestId) return; // request changed while fetching
+      if (data && Object.keys(data).length > 0) {
+        if (
+          data.property_basics ||
+          data.assessed_value_info ||
+          data.commercial_details ||
+          data.owner_information ||
+          data.zoning_info
+        ) {
+          setPropertyData(data);
+        } else {
+          setPropertyData({ raw: data });
         }
-      } catch (error) {
-        console.error('Error checking for results:', error);
+        setIsWaitingForResults(false);
       }
     };
 
     let interval: NodeJS.Timeout;
-    if (isWaitingForResults) {
-      interval = setInterval(checkForResults, 3000); // Check every 3 seconds when waiting
+    if (isWaitingForResults && currentRequestId) {
+      checkForResults();
+      interval = setInterval(checkForResults, 3000);
     }
-    
+
+    const onVisibility = () => {
+      if (!document.hidden) {
+        checkForResults();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
     return () => {
       if (interval) clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [isWaitingForResults]);
+  }, [isWaitingForResults, currentRequestId]);
+
+  useEffect(() => {
+    const load = () => {
+      if (!document.hidden) {
+        fetchHistory();
+      }
+    };
+    load();
+    const interval = setInterval(load, 10000);
+    document.addEventListener('visibilitychange', load);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', load);
+    };
+  }, []);
 
   const formatPropertySection = (title: string, data: any, icon: React.ReactNode) => {
     if (!data || Object.keys(data).length === 0) return null;
@@ -366,6 +488,51 @@ function App() {
           </form>
         </div>
 
+        <div className="mt-4 flex flex-wrap gap-4">
+          <button type="button" onClick={refreshResults} className="text-sm text-blue-600 hover:underline">Refresh Results</button>
+          <button type="button" onClick={handleClearResults} className="text-sm text-blue-600 hover:underline">Clear Results</button>
+          <button type="button" onClick={fetchHistory} className="text-sm text-blue-600 hover:underline">Refresh History</button>
+        </div>
+
+        {/* History Panel */}
+        <div className="mt-8 bg-white shadow-xl rounded-2xl p-8 border border-gray-100">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900">Past Searches</h2>
+            <button onClick={fetchHistory} className="text-sm text-blue-600 hover:underline">Refresh History</button>
+          </div>
+          {history.length === 0 ? (
+            <p className="text-gray-500">No past searches</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="text-left text-gray-500">
+                  <tr>
+                    <th className="px-2 py-1">Date/Time</th>
+                    <th className="px-2 py-1">Parcel ID</th>
+                    <th className="px-2 py-1">County/State</th>
+                    <th className="px-2 py-1">Summary</th>
+                    <th className="px-2 py-1">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map(item => (
+                    <tr key={item.id} className={selectedId === item.id ? 'bg-gray-50' : ''}>
+                      <td className="px-2 py-1">{new Date(item.createdAt).toLocaleString()}</td>
+                      <td className="px-2 py-1">{item.parcelId || '-'}</td>
+                      <td className="px-2 py-1">{[item.county, item.state].filter(Boolean).join(', ')}</td>
+                      <td className="px-2 py-1">{item.summary || '-'}</td>
+                      <td className="px-2 py-1 space-x-2">
+                        <button onClick={() => handleViewHistory(item.id)} className="text-blue-600 hover:underline">View</button>
+                        <button onClick={() => handleDeleteHistory(item.id)} className="text-red-600 hover:underline">Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
         {/* Property Data Results */}
         {isWaitingForResults && (
           <div className="mt-8 bg-white shadow-xl rounded-2xl p-8 border border-gray-100">
@@ -387,7 +554,15 @@ function App() {
 
         {propertyData && (
           <div className="mt-8 bg-white shadow-xl rounded-2xl p-8 border border-gray-100">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Property Research Results</h2>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Property Research Results</h2>
+              <button
+                onClick={handleClearResults}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                Clear results
+              </button>
+            </div>
             <div className="space-y-6">
               {formatPropertySection(
                 'Property Basics',
@@ -421,7 +596,7 @@ function App() {
               
               {/* Display any additional sections that weren't specifically handled */}
               {Object.entries(propertyData).map(([key, value]) => {
-                if (!['property_basics', 'assessed_value_info', 'commercial_details', 'owner_information', 'zoning_info'].includes(key) && 
+                if (!['property_basics', 'assessed_value_info', 'commercial_details', 'owner_information', 'zoning_info', 'raw'].includes(key) &&
                     value && typeof value === 'object' && Object.keys(value).length > 0) {
                   return formatPropertySection(
                     key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
@@ -432,6 +607,14 @@ function App() {
                 return null;
               })}
             </div>
+            {propertyData.raw && (
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold mb-2">Raw Results</h3>
+                <pre className="text-sm bg-gray-50 p-4 rounded-lg overflow-auto">
+                  {JSON.stringify(propertyData.raw, null, 2)}
+                </pre>
+              </div>
+            )}
           </div>
         )}
 
