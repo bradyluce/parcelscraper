@@ -79,7 +79,7 @@ function App() {
     const r = await fetch(`${url}${url.includes('?') ? '&' : '?'}ts=${Date.now()}`, { cache: 'no-store' });
     if (!r.ok) return null;
     return r.json();
-    }
+  }
 
   const counties = [
     'Marion',
@@ -185,7 +185,6 @@ function App() {
 
   const handleClearResults = async () => {
     try {
- codex/make-repo-production-ready-for-vite-react-spa-5zme7o
       if (currentRequestId) {
         await fetch(`/api/webhook-response?requestId=${encodeURIComponent(currentRequestId)}`, { method: 'DELETE' });
       } else {
@@ -201,7 +200,6 @@ function App() {
     }
   };
 
- codex/make-repo-production-ready-for-vite-react-spa-5zme7o
   const refreshResults = async () => {
     try {
       if (!currentRequestId) return;
