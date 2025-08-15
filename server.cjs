@@ -1,15 +1,12 @@
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
-codex/make-repo-production-ready-for-vite-react-spa-5zme7o
 const os = require('os');
 const fs = require('fs');
-
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-codex/make-repo-production-ready-for-vite-react-spa-5zme7o
 // In-memory data store with persistence
 let latestPropertyData = null;
 let history = [];
@@ -58,14 +55,12 @@ function json(res, body, status = 200) {
     .send(JSON.stringify(body));
 }
 
-
 // Middleware
 app.use(cors());
 app.options('*', cors());
 app.use(express.json({ limit: '1mb' }));
 
 // Health check
-codex/make-repo-production-ready-for-vite-react-spa-5zme7o
 app.get('/api/health', (_req, res) => json(res, { status: 'ok' }));
 
 // Helpers
@@ -79,12 +74,10 @@ function buildSummary(body) {
   return `${first} – ${second}`;
 }
 
-
 // Webhook endpoints
 app.post('/api/webhook-response', (req, res) => {
   try {
     if (!req.is('application/json')) {
-codex/make-repo-production-ready-for-vite-react-spa-5zme7o
       return json(res, { error: 'Content-Type must be application/json' }, 415);
     }
     const body = req.body || {};
@@ -188,7 +181,6 @@ app.use(express.static(distPath));
 app.get('*', (_req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
-codex/make-repo-production-ready-for-vite-react-spa-5zme7o
 
 app.listen(PORT, () => {
   console.log(`Server listening on :${PORT}`);
