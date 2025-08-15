@@ -185,6 +185,7 @@ function App() {
 
   const handleClearResults = async () => {
     try {
+ codex/make-repo-production-ready-for-vite-react-spa-5zme7o
       if (currentRequestId) {
         await fetch(`/api/webhook-response?requestId=${encodeURIComponent(currentRequestId)}`, { method: 'DELETE' });
       } else {
@@ -194,11 +195,13 @@ function App() {
       setIsWaitingForResults(false);
       setSelectedId(null);
       setCurrentRequestId(null);
+
     } catch (error) {
       console.error('Error clearing results:', error);
     }
   };
 
+ codex/make-repo-production-ready-for-vite-react-spa-5zme7o
   const refreshResults = async () => {
     try {
       if (!currentRequestId) return;
