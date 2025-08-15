@@ -4,10 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-  "dev": "vite",
-  "build": "vite build && node server.cjs",
-  "preview": "vite preview",
-  "start": "node server.cjs"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node server.cjs"
   },
   "dependencies": {
     "cors": "^2.8.5",

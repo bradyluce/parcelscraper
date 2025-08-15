@@ -169,6 +169,16 @@ function App() {
     }
   };
 
+  const handleClearResults = async () => {
+    try {
+      await fetch('/api/webhook-response', { method: 'DELETE' });
+      setPropertyData(null);
+      setIsWaitingForResults(false);
+    } catch (error) {
+      console.error('Error clearing results:', error);
+    }
+  };
+
   // Poll for property data updates
   useEffect(() => {
     const checkForResults = async () => {
@@ -387,7 +397,15 @@ function App() {
 
         {propertyData && (
           <div className="mt-8 bg-white shadow-xl rounded-2xl p-8 border border-gray-100">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Property Research Results</h2>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Property Research Results</h2>
+              <button
+                onClick={handleClearResults}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                Clear results
+              </button>
+            </div>
             <div className="space-y-6">
               {formatPropertySection(
                 'Property Basics',
