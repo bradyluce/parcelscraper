@@ -205,21 +205,31 @@ function App() {
       if (!currentRequestId) return;
       const data = await getJSON(`/api/webhook-response?requestId=${encodeURIComponent(currentRequestId)}`);
       if (data && Object.keys(data).length > 0) {
+        // Safe data processing similar to handleViewHistory
+        let safeData;
+        try {
+          safeData = JSON.parse(JSON.stringify(data));
+        } catch (err) {
+          console.warn('Data contains circular references, using original:', err);
+          safeData = data;
+        }
+        
         if (
-          data.property_basics ||
-          data.assessed_value_info ||
-          data.commercial_details ||
-          data.owner_information ||
-          data.zoning_info
+          safeData.property_basics ||
+          safeData.assessed_value_info ||
+          safeData.commercial_details ||
+          safeData.owner_information ||
+          safeData.zoning_info
         ) {
-          setPropertyData(data);
+          setPropertyData(safeData);
         } else {
-          setPropertyData({ raw: data });
+          setPropertyData({ raw: safeData });
         }
         setIsWaitingForResults(false);
       }
     } catch (error) {
       console.error('Error refreshing results:', error);
+      setIsWaitingForResults(false);
     }
   };
 
@@ -229,24 +239,49 @@ function App() {
   };
 
   const handleViewHistory = async (id: string) => {
-    const data = await getJSON(`/api/history/${id}`);
-    if (data) {
-      const payload = data.payload;
-      if (
-        payload && (
-          payload.property_basics ||
-          payload.assessed_value_info ||
-          payload.commercial_details ||
-          payload.owner_information ||
-          payload.zoning_info
-        )
-      ) {
-        setPropertyData(payload);
-      } else if (payload) {
-        setPropertyData({ raw: payload });
+    try {
+      const data = await getJSON(`/api/history/${id}`);
+      if (data && data.payload) {
+        const payload = data.payload;
+        
+        // Safely clone the payload to avoid circular reference issues
+        let safePayload;
+        try {
+          safePayload = JSON.parse(JSON.stringify(payload));
+        } catch (err) {
+          console.warn('Payload contains circular references, using original:', err);
+          safePayload = payload;
+        }
+        
+        // Check if payload has expected property data structure
+        const hasPropertySections = safePayload && (
+          safePayload.property_basics ||
+          safePayload.assessed_value_info ||
+          safePayload.commercial_details ||
+          safePayload.owner_information ||
+          safePayload.zoning_info
+        );
+        
+        if (hasPropertySections) {
+          setPropertyData(safePayload);
+        } else if (safePayload && typeof safePayload === 'object') {
+          // Wrap non-standard data in raw section
+          setPropertyData({ raw: safePayload });
+        } else {
+          // Fallback for primitive values
+          setPropertyData({ raw: { value: safePayload } });
+        }
+        
+        setSelectedId(id);
+        setIsWaitingForResults(false);
+        setCurrentRequestId(null);
       } else {
+        console.warn('No payload found in history data:', data);
         setPropertyData(null);
       }
+    } catch (error) {
+      console.error('Error viewing history:', error);
+      setPropertyData({ raw: { error: 'Failed to load historical data' } });
       setSelectedId(id);
       setIsWaitingForResults(false);
       setCurrentRequestId(null);
@@ -267,21 +302,39 @@ function App() {
     const checkForResults = async () => {
       const id = currentRequestId;
       if (!id) return;
-      const data = await getJSON(`/api/webhook-response?requestId=${encodeURIComponent(id)}`);
-      if (id !== currentRequestId) return; // request changed while fetching
-      if (data && Object.keys(data).length > 0) {
-        if (
-          data.property_basics ||
-          data.assessed_value_info ||
-          data.commercial_details ||
-          data.owner_information ||
-          data.zoning_info
-        ) {
-          setPropertyData(data);
-        } else {
-          setPropertyData({ raw: data });
+      
+      try {
+        const data = await getJSON(`/api/webhook-response?requestId=${encodeURIComponent(id)}`);
+        if (id !== currentRequestId) return; // request changed while fetching
+        
+        if (data && Object.keys(data).length > 0) {
+          // Safe data processing
+          let safeData;
+          try {
+            safeData = JSON.parse(JSON.stringify(data));
+          } catch (err) {
+            console.warn('Polling data contains circular references, using original:', err);
+            safeData = data;
+          }
+          
+          if (
+            safeData.property_basics ||
+            safeData.assessed_value_info ||
+            safeData.commercial_details ||
+            safeData.owner_information ||
+            safeData.zoning_info
+          ) {
+            setPropertyData(safeData);
+          } else {
+            setPropertyData({ raw: safeData });
+          }
+          setIsWaitingForResults(false);
         }
-        setIsWaitingForResults(false);
+      } catch (error) {
+        console.error('Error checking for results:', error);
+        if (id === currentRequestId) {
+          setIsWaitingForResults(false);
+        }
       }
     };
 
@@ -320,7 +373,8 @@ function App() {
   }, []);
 
   const formatPropertySection = (title: string, data: any, icon: React.ReactNode) => {
-    if (!data || Object.keys(data).length === 0) return null;
+    // Enhanced null/undefined checking
+    if (!data || typeof data !== 'object' || Object.keys(data).length === 0) return null;
 
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -331,16 +385,32 @@ function App() {
           <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Object.entries(data).map(([key, value]) => (
-            <div key={key} className="bg-gray-50 p-3 rounded-lg">
-              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-              </dt>
-              <dd className="text-sm font-medium text-gray-900">
-                {value || 'Not available'}
-              </dd>
-            </div>
-          ))}
+          {Object.entries(data).map(([key, value]) => {
+            // Safe value rendering
+            let displayValue = 'Not available';
+            if (value !== null && value !== undefined) {
+              if (typeof value === 'object') {
+                try {
+                  displayValue = JSON.stringify(value, null, 2);
+                } catch (err) {
+                  displayValue = '[Complex Object]';
+                }
+              } else {
+                displayValue = String(value);
+              }
+            }
+            
+            return (
+              <div key={key} className="bg-gray-50 p-3 rounded-lg">
+                <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                  {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                </dt>
+                <dd className="text-sm font-medium text-gray-900 break-words">
+                  {displayValue}
+                </dd>
+              </div>
+            );
+          })}
         </div>
       </div>
     );
@@ -611,9 +681,34 @@ function App() {
             {propertyData.raw && (
               <div className="mt-6">
                 <h3 className="text-lg font-semibold mb-2">Raw Results</h3>
-                <pre className="text-sm bg-gray-50 p-4 rounded-lg overflow-auto">
-                  {JSON.stringify(propertyData.raw, null, 2)}
-                </pre>
+                <div className="text-sm bg-gray-50 p-4 rounded-lg overflow-auto">
+                  {(() => {
+                    try {
+                      return (
+                        <pre className="whitespace-pre-wrap">
+                          {JSON.stringify(propertyData.raw, null, 2)}
+                        </pre>
+                      );
+                    } catch (err) {
+                      return (
+                        <div className="text-red-600">
+                          <p className="mb-2">Unable to display raw data as JSON (likely contains circular references)</p>
+                          <p className="text-xs">Error: {String(err)}</p>
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-blue-600">Show object keys</summary>
+                            <ul className="mt-2 ml-4 list-disc">
+                              {Object.keys(propertyData.raw || {}).map(key => (
+                                <li key={key} className="text-gray-700">
+                                  {key}: {typeof (propertyData.raw as any)?.[key]}
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        </div>
+                      );
+                    }
+                  })()}
+                </div>
               </div>
             )}
           </div>
