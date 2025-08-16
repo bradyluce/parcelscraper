@@ -617,7 +617,7 @@ function App() {
               </p>
               <div className="mt-4 flex items-center justify-center space-x-2 text-sm text-gray-500">
                 <Clock className="w-4 h-4" />
-                <span>Estimated time: 2-5 minutes</span>
+                <span>Estimated time: 5-10 minutes</span>
               </div>
             </div>
           </div>
