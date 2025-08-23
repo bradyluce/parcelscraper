@@ -134,8 +134,8 @@ function App() {
     setCurrentRequestId(requestId);
 
     try {
-      const webhookUrl = 'https://public.lindy.ai/api/v1/webhooks/lindy/bc4e7bb9-460e-47ad-b041-6f4412109c17';
-      const webhookSecret = '46545a636d33089c47ef11c4af664ff5a4ce3dd1216afa3b1d95f4005dd48f67';
+      const webhookUrl = 'https://public.lindy.ai/api/v1/webhooks/lindy/dec166ea-4fd5-4e35-9c09-1998b0a82056';
+      const webhookSecret = 'a3e424ee579a2770576960b9f01ea39dc89db2abe15ec16df6ec60544212f767';
 
       const response = await fetch(webhookUrl, {
         method: 'POST',
