@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Send, CheckCircle, XCircle, Loader2, Home, DollarSign, Building, MapPin, FileText, Clock } from 'lucide-react';
-import PropertyInputForm from './components/PropertyInputForm';
 
 interface FormData {
   parcelId: string;
   address: string;
   county: string;
   state: string;
+  propertyType: 'Residential' | 'Land';
 }
 
 interface FormState {
@@ -60,7 +60,8 @@ function App() {
     parcelId: '',
     address: '',
     county: '',
-    state: ''
+    state: '',
+    propertyType: 'Residential'
   });
 
   const [formState, setFormState] = useState<FormState>({
@@ -149,6 +150,7 @@ function App() {
           address: formData.address || undefined,
           county: formData.county || undefined,
           state: formData.state || undefined,
+          propertyType: formData.propertyType,
           requestId,
           callbackUrl: `${window.location.origin}/api/webhook-response`
         })
@@ -170,7 +172,8 @@ function App() {
         parcelId: '',
         address: '',
         county: '',
-        state: ''
+        state: '',
+        propertyType: 'Residential'
       });
 
     } catch (error) {
@@ -428,10 +431,6 @@ function App() {
             Comprehensive property research and data collection service
           </p>
         </div>
-        <div className="bg-white shadow-xl rounded-2xl p-8 border border-gray-100 mb-8">
-          <PropertyInputForm />
-        </div>
-
         <div className="bg-white shadow-xl rounded-2xl p-8 border border-gray-100">
           {/* Information Section */}
           <div className="mb-8 p-6 bg-blue-50 rounded-xl border border-blue-100">
@@ -522,6 +521,23 @@ function App() {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                 placeholder="Enter state (e.g., TX)"
               />
+            </div>
+
+            {/* Property Type */}
+            <div>
+              <label htmlFor="propertyType" className="block text-sm font-semibold text-gray-700 mb-2">
+                Property Type
+              </label>
+              <select
+                id="propertyType"
+                name="propertyType"
+                value={formData.propertyType}
+                onChange={handleInputChange}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white"
+              >
+                <option value="Residential">Residential</option>
+                <option value="Land">Land</option>
+              </select>
             </div>
 
             {/* Error Message */}
