@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Send, CheckCircle, XCircle, Loader2, Home, DollarSign, Building, MapPin, FileText, Clock } from 'lucide-react';
+import PropertyInputForm from './components/PropertyInputForm';
 
 interface FormData {
   parcelId: string;
@@ -426,6 +427,9 @@ function App() {
           <p className="text-lg text-gray-600 leading-relaxed">
             Comprehensive property research and data collection service
           </p>
+        </div>
+        <div className="bg-white shadow-xl rounded-2xl p-8 border border-gray-100 mb-8">
+          <PropertyInputForm />
         </div>
 
         <div className="bg-white shadow-xl rounded-2xl p-8 border border-gray-100">
