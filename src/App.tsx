@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Send, CheckCircle, XCircle, Loader2, Home, DollarSign, Building, MapPin, FileText, Clock } from 'lucide-react';
+import { Send, CheckCircle, XCircle, Loader2, Clock } from 'lucide-react';
 
 interface FormData {
   parcelId: string;
@@ -16,43 +16,26 @@ interface FormState {
   success: boolean;
 }
 
-interface PropertyData {
-  property_basics?: {
-    address?: string;
-    parcel_id?: string;
-    square_footage?: string;
-    lot_size?: string;
-    year_built?: string;
-    property_type?: string;
-    [key: string]: any;
-  };
-  assessed_value_info?: {
-    current_assessed_value?: string;
-    land_value?: string;
-    improvement_value?: string;
-    total_value?: string;
-    [key: string]: any;
-  };
-  commercial_details?: {
-    cap_rate?: string;
-    noi?: string;
-    rental_income?: string;
-    operating_expenses?: string;
-    [key: string]: any;
-  };
-  owner_information?: {
-    owner_name?: string;
-    mailing_address?: string;
-    ownership_type?: string;
-    [key: string]: any;
-  };
-  zoning_info?: {
-    zoning_classification?: string;
-    land_use?: string;
-    restrictions?: string;
-    [key: string]: any;
-  };
+
+interface SectionData {
+  required?: boolean;
   [key: string]: any;
+}
+
+interface NtreisPropertyData {
+  propertyInformation: SectionData | null;
+  locationInformation: SectionData | null;
+  roomDetails: SectionData | null;
+  featuresInformation: SectionData | null;
+  lotInformation: SectionData | null;
+  utilityInformation: SectionData | null;
+  environmentalInformation: SectionData | null;
+  financialInformation: SectionData | null;
+  hoaInformation: SectionData | null;
+  agentInformation: SectionData | null;
+  showingInformation: SectionData | null;
+  remarks: SectionData | null;
+  _receivedAt?: string | null;
 }
 
 function App() {
@@ -71,16 +54,106 @@ function App() {
     success: false
   });
 
-  const [propertyData, setPropertyData] = useState<PropertyData | null>(null);
+  const [propertyData, setPropertyData] = useState<NtreisPropertyData | null>(null);
+  const [dataError, setDataError] = useState<string | null>(null);
   const [isWaitingForResults, setIsWaitingForResults] = useState(false);
   const [history, setHistory] = useState<Array<{ id: string; createdAt: number; parcelId?: string; county?: string; state?: string; summary?: string }>>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentRequestId, setCurrentRequestId] = useState<string | null>(null);
 
+  const sectionKeys = [
+    'propertyInformation',
+    'locationInformation',
+    'roomDetails',
+    'featuresInformation',
+    'lotInformation',
+    'utilityInformation',
+    'environmentalInformation',
+    'financialInformation',
+    'hoaInformation',
+    'agentInformation',
+    'showingInformation',
+    'remarks'
+  ] as const;
+
+  type SectionKey = typeof sectionKeys[number];
+
+  const sectionTitles: Record<SectionKey, string> = {
+    propertyInformation: 'Property Information',
+    locationInformation: 'Location & School Information',
+    roomDetails: 'Room Details',
+    featuresInformation: 'Features Information',
+    lotInformation: 'Lot Information',
+    utilityInformation: 'Utility Information',
+    environmentalInformation: 'Environmental Information',
+    financialInformation: 'Financial Information',
+    hoaInformation: 'HOA Information',
+    agentInformation: 'Agent & Office Information',
+    showingInformation: 'Showing Information',
+    remarks: 'Remarks'
+  };
+
+  const parseNtreisData = (raw: any): NtreisPropertyData => {
+    const result: any = {};
+    sectionKeys.forEach(key => {
+      const section = raw && typeof raw === 'object' ? raw[key] : null;
+      result[key] = section && typeof section === 'object' ? section : null;
+    });
+    result._receivedAt = raw?._receivedAt ?? null;
+    return result as NtreisPropertyData;
+  };
+
+  const handleFieldChange = (section: SectionKey, field: string, value: any) => {
+    setPropertyData(prev => {
+      if (!prev) return prev;
+      const sectionData: SectionData = prev[section] ? { ...prev[section]! } : { required: false };
+      sectionData[field] = value;
+      return { ...prev, [section]: sectionData };
+    });
+  };
+
+  const handlePropertyDataSubmit = async () => {
+    if (!propertyData) return;
+
+    const missingRequired = sectionKeys.some(key => {
+      const section = propertyData[key];
+      if (section?.required) {
+        return Object.entries(section).some(
+          ([k, v]) =>
+            k !== 'required' &&
+            (v === null || v === '' || (Array.isArray(v) && v.length === 0))
+        );
+      }
+      return false;
+    });
+
+    if (missingRequired) {
+      setDataError('Please fill out all required fields.');
+      return;
+    }
+
+    try {
+      await fetch('/api/property-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(propertyData),
+      });
+    } catch (err) {
+      console.error('Failed to submit property data', err);
+    }
+  };
+
   async function getJSON(url: string) {
-    const r = await fetch(`${url}${url.includes('?') ? '&' : '?'}ts=${Date.now()}`, { cache: 'no-store' });
-    if (!r.ok) return null;
-    return r.json();
+    try {
+      const r = await fetch(`${url}${url.includes('?') ? '&' : '?'}ts=${Date.now()}`, { cache: 'no-store' });
+      if (!r.ok) return null;
+      const json = await r.json();
+      setDataError(null);
+      return json;
+    } catch (err) {
+      setDataError('Invalid response from server.');
+      return null;
+    }
   }
 
   const counties = [
@@ -198,6 +271,7 @@ function App() {
       setIsWaitingForResults(false);
       setSelectedId(null);
       setCurrentRequestId(null);
+      setDataError(null);
 
     } catch (error) {
       console.error('Error clearing results:', error);
@@ -209,7 +283,6 @@ function App() {
       if (!currentRequestId) return;
       const data = await getJSON(`/api/webhook-response?requestId=${encodeURIComponent(currentRequestId)}`);
       if (data && Object.keys(data).length > 0) {
-        // Safe data processing similar to handleViewHistory
         let safeData;
         try {
           safeData = JSON.parse(JSON.stringify(data));
@@ -217,18 +290,7 @@ function App() {
           console.warn('Data contains circular references, using original:', err);
           safeData = data;
         }
-        
-        if (
-          safeData.property_basics ||
-          safeData.assessed_value_info ||
-          safeData.commercial_details ||
-          safeData.owner_information ||
-          safeData.zoning_info
-        ) {
-          setPropertyData(safeData);
-        } else {
-          setPropertyData({ raw: safeData });
-        }
+        setPropertyData(parseNtreisData(safeData));
         setIsWaitingForResults(false);
       }
     } catch (error) {
@@ -247,8 +309,7 @@ function App() {
       const data = await getJSON(`/api/history/${id}`);
       if (data && data.payload) {
         const payload = data.payload;
-        
-        // Safely clone the payload to avoid circular reference issues
+
         let safePayload;
         try {
           safePayload = JSON.parse(JSON.stringify(payload));
@@ -256,26 +317,8 @@ function App() {
           console.warn('Payload contains circular references, using original:', err);
           safePayload = payload;
         }
-        
-        // Check if payload has expected property data structure
-        const hasPropertySections = safePayload && (
-          safePayload.property_basics ||
-          safePayload.assessed_value_info ||
-          safePayload.commercial_details ||
-          safePayload.owner_information ||
-          safePayload.zoning_info
-        );
-        
-        if (hasPropertySections) {
-          setPropertyData(safePayload);
-        } else if (safePayload && typeof safePayload === 'object') {
-          // Wrap non-standard data in raw section
-          setPropertyData({ raw: safePayload });
-        } else {
-          // Fallback for primitive values
-          setPropertyData({ raw: { value: safePayload } });
-        }
-        
+
+        setPropertyData(parseNtreisData(safePayload));
         setSelectedId(id);
         setIsWaitingForResults(false);
         setCurrentRequestId(null);
@@ -285,7 +328,8 @@ function App() {
       }
     } catch (error) {
       console.error('Error viewing history:', error);
-      setPropertyData({ raw: { error: 'Failed to load historical data' } });
+      setPropertyData(null);
+      setDataError('Failed to load historical data');
       setSelectedId(id);
       setIsWaitingForResults(false);
       setCurrentRequestId(null);
@@ -312,7 +356,6 @@ function App() {
         if (id !== currentRequestId) return; // request changed while fetching
         
         if (data && Object.keys(data).length > 0) {
-          // Safe data processing
           let safeData;
           try {
             safeData = JSON.parse(JSON.stringify(data));
@@ -320,18 +363,7 @@ function App() {
             console.warn('Polling data contains circular references, using original:', err);
             safeData = data;
           }
-          
-          if (
-            safeData.property_basics ||
-            safeData.assessed_value_info ||
-            safeData.commercial_details ||
-            safeData.owner_information ||
-            safeData.zoning_info
-          ) {
-            setPropertyData(safeData);
-          } else {
-            setPropertyData({ raw: safeData });
-          }
+          setPropertyData(parseNtreisData(safeData));
           setIsWaitingForResults(false);
         }
       } catch (error) {
@@ -417,6 +449,112 @@ function App() {
           })}
         </div>
       </div>
+    );
+  };
+
+  const renderSection = (key: SectionKey, section: SectionData | null) => {
+    const required = section?.required === true;
+    const fields = section ? Object.entries(section).filter(([k]) => k !== 'required') : [];
+
+    return (
+      <details key={key} className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <summary className="cursor-pointer px-6 py-4 flex justify-between items-center">
+          <span className="font-semibold text-gray-900">
+            {sectionTitles[key]} {required && <span className="text-red-500">*</span>}
+          </span>
+        </summary>
+        {fields.length > 0 && (
+          <div className="px-6 pb-6 pt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {fields.map(([fieldKey, value]) => {
+              const isEmpty =
+                value === null ||
+                value === '' ||
+                (Array.isArray(value) && value.length === 0);
+
+              const commonProps = {
+                className: `w-full border rounded-lg p-2 ${required && isEmpty ? 'border-red-500' : 'border-gray-300'}`,
+              };
+
+              const label = (
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {fieldKey}
+                  {required && <span className="text-red-500">*</span>}
+                </label>
+              );
+
+              if (Array.isArray(value)) {
+                return (
+                  <div key={fieldKey}>
+                    {label}
+                    <select
+                      multiple
+                      value={value.map(String)}
+                      onChange={e =>
+                        handleFieldChange(
+                          key,
+                          fieldKey,
+                          Array.from(e.target.selectedOptions).map(o => o.value)
+                        )
+                      }
+                      {...commonProps}
+                    >
+                      {value.map((v: any, idx: number) => (
+                        <option key={idx} value={String(v)}>
+                          {String(v)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              }
+
+              if (typeof value === 'boolean') {
+                return (
+                  <div key={fieldKey} className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={value}
+                      onChange={e => handleFieldChange(key, fieldKey, e.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      {fieldKey}
+                      {required && <span className="text-red-500">*</span>}
+                    </span>
+                  </div>
+                );
+              }
+
+              let inputType: string = 'text';
+              let inputValue: any = value ?? '';
+              if (typeof value === 'number') {
+                inputType = 'number';
+              } else if (typeof value === 'string' && !isNaN(Date.parse(value))) {
+                inputType = 'date';
+                inputValue = value ? value.split('T')[0] : '';
+              }
+
+              return (
+                <div key={fieldKey}>
+                  {label}
+                  <input
+                    type={inputType}
+                    value={inputValue}
+                    onChange={e => {
+                      let newVal: any = e.target.value;
+                      if (inputType === 'number') {
+                        newVal = e.target.value === '' ? null : Number(e.target.value);
+                      }
+                      handleFieldChange(key, fieldKey, newVal === '' ? null : newVal);
+                    }}
+                    {...commonProps}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </details>
     );
   };
 
@@ -643,6 +781,10 @@ function App() {
           </div>
         )}
 
+        {dataError && !propertyData && (
+          <div className="mt-8 text-red-600">{dataError}</div>
+        )}
+
         {propertyData && (
           <div className="mt-8 bg-white shadow-xl rounded-2xl p-8 border border-gray-100">
             <div className="flex items-center justify-between mb-6">
@@ -654,83 +796,25 @@ function App() {
                 Clear results
               </button>
             </div>
-            <div className="space-y-6">
-              {formatPropertySection(
-                'Property Basics',
-                propertyData.property_basics,
-                <Home className="w-5 h-5 text-blue-600" />
-              )}
-              
-              {formatPropertySection(
-                'Assessed Value Information',
-                propertyData.assessed_value_info,
-                <DollarSign className="w-5 h-5 text-blue-600" />
-              )}
-              
-              {formatPropertySection(
-                'Commercial Details',
-                propertyData.commercial_details,
-                <Building className="w-5 h-5 text-blue-600" />
-              )}
-              
-              {formatPropertySection(
-                'Owner Information',
-                propertyData.owner_information,
-                <FileText className="w-5 h-5 text-blue-600" />
-              )}
-              
-              {formatPropertySection(
-                'Zoning Information',
-                propertyData.zoning_info,
-                <MapPin className="w-5 h-5 text-blue-600" />
-              )}
-              
-              {/* Display any additional sections that weren't specifically handled */}
-              {Object.entries(propertyData).map(([key, value]) => {
-                if (!['property_basics', 'assessed_value_info', 'commercial_details', 'owner_information', 'zoning_info', 'raw'].includes(key) &&
-                    value && typeof value === 'object' && Object.keys(value).length > 0) {
-                  return formatPropertySection(
-                    key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                    value,
-                    <FileText className="w-5 h-5 text-blue-600" />
-                  );
-                }
-                return null;
-              })}
-            </div>
-            {propertyData.raw && (
-              <div className="mt-6">
-                <h3 className="text-lg font-semibold mb-2">Raw Results</h3>
-                <div className="text-sm bg-gray-50 p-4 rounded-lg overflow-auto">
-                  {(() => {
-                    try {
-                      return (
-                        <pre className="whitespace-pre-wrap">
-                          {JSON.stringify(propertyData.raw, null, 2)}
-                        </pre>
-                      );
-                    } catch (err) {
-                      return (
-                        <div className="text-red-600">
-                          <p className="mb-2">Unable to display raw data as JSON (likely contains circular references)</p>
-                          <p className="text-xs">Error: {String(err)}</p>
-                          <details className="mt-2">
-                            <summary className="cursor-pointer text-blue-600">Show object keys</summary>
-                            <ul className="mt-2 ml-4 list-disc">
-                              {Object.keys(propertyData.raw || {}).map(key => (
-                                <li key={key} className="text-gray-700">
-                                  {key}: {typeof (propertyData.raw as any)?.[key]}
-                                </li>
-                              ))}
-                            </ul>
-                          </details>
-                        </div>
-                      );
-                    }
-                  })()}
-                </div>
-              </div>
+            {dataError && (
+              <div className="text-red-600 mb-4">{dataError}</div>
             )}
+            <div className="space-y-4">
+              {sectionKeys.map(key => renderSection(key, propertyData[key]))}
+            </div>
+            <div className="mt-6 flex flex-col space-y-4">
+              <button
+                onClick={handlePropertyDataSubmit}
+                className="self-start bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+              >
+                Save Changes
+              </button>
+              {propertyData._receivedAt && (
+                <div className="text-sm text-gray-500">
+                  Received at: {propertyData._receivedAt}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
