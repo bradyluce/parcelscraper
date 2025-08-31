@@ -419,11 +419,11 @@ function App() {
       document.removeEventListener('visibilitychange', load);
     };
   }, []);
-
   const renderSection = (key: SectionKey, section: SectionData | null) => {
     const fields = section ? Object.entries(section) : [];
 
     return (
+ codex/update-form-renderer-for-codex-frontend-9s9a29
       <div key={key} className="bg-white rounded-xl shadow-sm border border-gray-200">
         <h3 className="px-6 py-4 font-semibold text-gray-900">{sectionTitles[key]}</h3>
         {fields.length > 0 && (
