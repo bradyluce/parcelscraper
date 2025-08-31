@@ -17,28 +17,17 @@ interface FormState {
 }
 
 
-interface FieldData {
-  value: any;
-  required: boolean;
+interface ListingField {
+  value?: any;
+  required?: boolean;
+  unit?: string;
+  year?: number;
+  [key: string]: any;
 }
 
-interface SectionData {
-  [key: string]: FieldData;
-}
-
-interface NtreisPropertyData {
-  propertyInformation: SectionData | null;
-  locationInformation: SectionData | null;
-  roomDetails: SectionData | null;
-  featuresInformation: SectionData | null;
-  lotInformation: SectionData | null;
-  utilityInformation: SectionData | null;
-  environmentalInformation: SectionData | null;
-  financialInformation: SectionData | null;
-  hoaInformation: SectionData | null;
-  agentInformation: SectionData | null;
-  showingInformation: SectionData | null;
-  remarks: SectionData | null;
+interface PropertyData {
+  propertyType: string;
+  listingData: Record<string, any>;
   _receivedAt?: string | null;
 }
 
@@ -58,74 +47,53 @@ function App() {
     success: false
   });
 
-  const [propertyData, setPropertyData] = useState<NtreisPropertyData | null>(null);
+  const [propertyData, setPropertyData] = useState<PropertyData | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
   const [isWaitingForResults, setIsWaitingForResults] = useState(false);
   const [history, setHistory] = useState<Array<{ id: string; createdAt: number; parcelId?: string; county?: string; state?: string; summary?: string }>>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentRequestId, setCurrentRequestId] = useState<string | null>(null);
 
-  const sectionKeys = [
-    'propertyInformation',
-    'locationInformation',
-    'roomDetails',
-    'featuresInformation',
-    'lotInformation',
-    'utilityInformation',
-    'environmentalInformation',
-    'financialInformation',
-    'hoaInformation',
-    'agentInformation',
-    'showingInformation',
-    'remarks'
-  ] as const;
+  const humanize = (str: string) =>
+    str
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/[_-]/g, ' ')
+      .replace(/^./, s => s.toUpperCase());
 
-  type SectionKey = typeof sectionKeys[number];
-
-  const sectionTitles: Record<SectionKey, string> = {
-    propertyInformation: 'Property Information',
-    locationInformation: 'Location & School Information',
-    roomDetails: 'Room Details',
-    featuresInformation: 'Features Information',
-    lotInformation: 'Lot Information',
-    utilityInformation: 'Utility Information',
-    environmentalInformation: 'Environmental Information',
-    financialInformation: 'Financial Information',
-    hoaInformation: 'HOA Information',
-    agentInformation: 'Agent & Office Information',
-    showingInformation: 'Showing Information',
-    remarks: 'Remarks'
+  const parsePropertyData = (raw: any): PropertyData => {
+    return {
+      propertyType: raw?.propertyType || 'Residential',
+      listingData:
+        raw?.listingData && typeof raw.listingData === 'object'
+          ? raw.listingData
+          : {},
+      _receivedAt: raw?._receivedAt ?? null,
+    };
   };
 
-  const parseNtreisData = (raw: any): NtreisPropertyData => {
-    const result: any = {};
-    sectionKeys.forEach(key => {
-      const section = raw && typeof raw === 'object' ? raw[key] : null;
-      result[key] = section && typeof section === 'object' ? section : null;
-    });
-    result._receivedAt = raw?._receivedAt ?? null;
-    return result as NtreisPropertyData;
-  };
-
-  const handleFieldChange = (section: SectionKey, field: string, value: any) => {
+  const handleFieldChange = (path: string[], value: any) => {
     setPropertyData(prev => {
       if (!prev) return prev;
-      const sectionData: SectionData = prev[section] ? { ...prev[section]! } : {};
-      const fieldData: FieldData = sectionData[field]
-        ? { ...sectionData[field], value }
+      const listingData: any = { ...prev.listingData };
+      let current: any = listingData;
+      for (let i = 0; i < path.length - 1; i++) {
+        const key = path[i];
+        current[key] = { ...(current[key] as any) };
+        current = current[key];
+      }
+      const lastKey = path[path.length - 1];
+      const field: ListingField = current[lastKey]
+        ? { ...(current[lastKey] as ListingField), value }
         : { value, required: false };
-      sectionData[field] = fieldData;
-      return { ...prev, [section]: sectionData };
+      current[lastKey] = field;
+      return { ...prev, listingData };
     });
   };
 
-  const handlePropertyDataSubmit = async () => {
-    if (!propertyData) return;
-
-    const missingRequired = sectionKeys.some(key => {
-      const section = propertyData[key];
-      if (section) {
-        return Object.values(section).some(field => {
+  const hasMissingRequired = (section: any): boolean =>
+    Object.values(section).some((field: any) => {
+      if (field && typeof field === 'object') {
+        if ('value' in field) {
           const v = field.value;
           return (
             field.required &&
@@ -134,12 +102,16 @@ function App() {
               v === '<UNKNOWN>' ||
               (Array.isArray(v) && v.length === 0))
           );
-        });
+        }
+        return hasMissingRequired(field);
       }
       return false;
     });
 
-    if (missingRequired) {
+  const handlePropertyDataSubmit = async () => {
+    if (!propertyData) return;
+
+    if (hasMissingRequired(propertyData.listingData)) {
       setDataError('Please fill out all required fields.');
       return;
     }
@@ -302,7 +274,7 @@ function App() {
           console.warn('Data contains circular references, using original:', err);
           safeData = data;
         }
-        setPropertyData(parseNtreisData(safeData));
+        setPropertyData(parsePropertyData(safeData));
         setIsWaitingForResults(false);
       }
     } catch (error) {
@@ -330,7 +302,7 @@ function App() {
           safePayload = payload;
         }
 
-        setPropertyData(parseNtreisData(safePayload));
+        setPropertyData(parsePropertyData(safePayload));
         setSelectedId(id);
         setIsWaitingForResults(false);
         setCurrentRequestId(null);
@@ -375,7 +347,7 @@ function App() {
             console.warn('Polling data contains circular references, using original:', err);
             safeData = data;
           }
-          setPropertyData(parseNtreisData(safeData));
+          setPropertyData(parsePropertyData(safeData));
           setIsWaitingForResults(false);
         }
       } catch (error) {
@@ -419,104 +391,113 @@ function App() {
       document.removeEventListener('visibilitychange', load);
     };
   }, []);
-  const renderSection = (key: SectionKey, section: SectionData | null) => {
-    const fields = section ? Object.entries(section) : [];
+  const renderFields = (section: any, path: string[]): JSX.Element[] => {
+    return Object.entries(section).map(([fieldKey, fieldValue]) => {
+      if (fieldValue && typeof fieldValue === 'object' && !('value' in fieldValue)) {
+        return (
+          <div
+            key={path.concat(fieldKey).join('.')}
+            className="col-span-1 md:col-span-2"
+          >
+            <h4 className="text-md font-semibold text-gray-900 mt-2">
+              {humanize(fieldKey)}
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+              {renderFields(fieldValue, path.concat(fieldKey))}
+            </div>
+          </div>
+        );
+      }
 
+      const field: ListingField = fieldValue || {};
+      const value = field.value;
+      const required = field.required;
+      const isEmpty =
+        value === null ||
+        value === undefined ||
+        value === '' ||
+        value === '<UNKNOWN>' ||
+        (Array.isArray(value) && value.length === 0);
+
+      let displayValue: any = '';
+      if (Array.isArray(value)) displayValue = value.join(', ');
+      else if (typeof value === 'boolean') displayValue = value ? 'Yes' : 'No';
+      else displayValue = value ?? '';
+
+      const commonProps = {
+        className: `w-full border rounded-lg p-2 ${
+          required && isEmpty ? 'border-red-500' : 'border-gray-300'
+        }`,
+      };
+
+      const label = (
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          {humanize(fieldKey)}
+          {required && <span className="text-red-500">*</span>}
+        </label>
+      );
+
+      if (typeof value === 'boolean') {
+        return (
+          <div key={path.concat(fieldKey).join('.')}> 
+            {label}
+            <select
+              value={value ? 'true' : 'false'}
+              onChange={e =>
+                handleFieldChange(path.concat(fieldKey), e.target.value === 'true')
+              }
+              {...commonProps}
+            >
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </div>
+        );
+      }
+
+      const inputType = typeof value === 'number' ? 'number' : 'text';
+
+      return (
+        <div key={path.concat(fieldKey).join('.')}> 
+          {label}
+          <div className="flex items-center space-x-2">
+            <input
+              type={inputType}
+              value={displayValue}
+              onChange={e => {
+                let newVal: any = e.target.value;
+                if (Array.isArray(value)) {
+                  newVal = e.target.value
+                    .split(',')
+                    .map(v => v.trim())
+                    .filter(v => v.length > 0);
+                } else if (typeof value === 'number') {
+                  newVal = e.target.value === '' ? null : Number(e.target.value);
+                }
+                handleFieldChange(path.concat(fieldKey), newVal);
+              }}
+              {...commonProps}
+            />
+            {(field.unit || field.year) && (
+              <span className="text-sm text-gray-500">
+                {field.unit}
+                {field.year ? ` (${field.year})` : ''}
+              </span>
+            )}
+          </div>
+        </div>
+      );
+    });
+  };
+
+  const renderSection = (key: string, section: any) => {
+    const fields = section ? Object.entries(section) : [];
     return (
       <div key={key} className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <h3 className="px-6 py-4 font-semibold text-gray-900">{sectionTitles[key]}</h3>
+        <h3 className="px-6 py-4 font-semibold text-gray-900">{humanize(key)}</h3>
         {fields.length > 0 && (
           <div className="px-6 pb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {fields.map(([fieldKey, field]) => {
-              const value = field.value;
-              const required = field.required;
-              const isEmpty =
-                value === null ||
-                value === '' ||
-                value === '<UNKNOWN>' ||
-                (Array.isArray(value) && value.length === 0);
-
-              const commonProps = {
-                className: `w-full border rounded-lg p-2 ${required && isEmpty ? 'border-red-500' : 'border-gray-300'}`,
-              };
-
-              const label = (
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {fieldKey}
-                  {required && <span className="text-red-500">*</span>}
-                </label>
-              );
-
-              if (Array.isArray(value)) {
-                return (
-                  <div key={fieldKey}>
-                    {label}
-                    <select
-                      multiple
-                      value={value.map(String)}
-                      onChange={e =>
-                        handleFieldChange(
-                          key,
-                          fieldKey,
-                          Array.from(e.target.selectedOptions).map(o => o.value)
-                        )
-                      }
-                      {...commonProps}
-                    >
-                      {value.map((v: any, idx: number) => (
-                        <option key={idx} value={String(v)}>
-                          {String(v)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                );
-              }
-
-              if (typeof value === 'boolean') {
-                return (
-                  <div key={fieldKey} className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={value}
-                      onChange={e => handleFieldChange(key, fieldKey, e.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    <span className="text-sm font-medium text-gray-700">
-                      {fieldKey}
-                      {required && <span className="text-red-500">*</span>}
-                    </span>
-                  </div>
-                );
-              }
-
-              let inputType: string = 'text';
-              let inputValue: any = value === '<UNKNOWN>' ? '' : value ?? '';
-              if (typeof value === 'number') {
-                inputType = 'number';
-              } else if (typeof value === 'string' && !isNaN(Date.parse(value))) {
-                inputType = 'date';
-                inputValue = value ? value.split('T')[0] : '';
-              }
-
-              return (
-                <div key={fieldKey}>
-                  {label}
-                  <input
-                    type={inputType}
-                    value={inputValue}
-                    onChange={e => {
-                      let newVal: any = e.target.value;
-                      if (inputType === 'number') {
-                        newVal = e.target.value === '' ? null : Number(e.target.value);
-                      }
-                      handleFieldChange(key, fieldKey, newVal === '' ? null : newVal);
-                    }}
-                    {...commonProps}
-                  />
-                </div>
-              );
-            })}
+            {renderFields(section, [key])}
           </div>
         )}
       </div>
@@ -765,7 +746,9 @@ function App() {
               <div className="text-red-600 mb-4">{dataError}</div>
             )}
             <div className="space-y-4">
-              {sectionKeys.map(key => renderSection(key, propertyData[key]))}
+              {Object.entries(propertyData.listingData).map(([key, section]) =>
+                renderSection(key, section)
+              )}
             </div>
             <div className="mt-6 flex flex-col space-y-4">
               <button
