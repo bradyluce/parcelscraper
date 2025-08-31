@@ -17,9 +17,13 @@ interface FormState {
 }
 
 
+interface FieldData {
+  value: any;
+  required: boolean;
+}
+
 interface SectionData {
-  required?: boolean;
-  [key: string]: any;
+  [key: string]: FieldData;
 }
 
 interface NtreisPropertyData {
@@ -106,8 +110,11 @@ function App() {
   const handleFieldChange = (section: SectionKey, field: string, value: any) => {
     setPropertyData(prev => {
       if (!prev) return prev;
-      const sectionData: SectionData = prev[section] ? { ...prev[section]! } : { required: false };
-      sectionData[field] = value;
+      const sectionData: SectionData = prev[section] ? { ...prev[section]! } : {};
+      const fieldData: FieldData = sectionData[field]
+        ? { ...sectionData[field], value }
+        : { value, required: false };
+      sectionData[field] = fieldData;
       return { ...prev, [section]: sectionData };
     });
   };
@@ -117,12 +124,17 @@ function App() {
 
     const missingRequired = sectionKeys.some(key => {
       const section = propertyData[key];
-      if (section?.required) {
-        return Object.entries(section).some(
-          ([k, v]) =>
-            k !== 'required' &&
-            (v === null || v === '' || (Array.isArray(v) && v.length === 0))
-        );
+      if (section) {
+        return Object.values(section).some(field => {
+          const v = field.value;
+          return (
+            field.required &&
+            (v === null ||
+              v === '' ||
+              v === '<UNKNOWN>' ||
+              (Array.isArray(v) && v.length === 0))
+          );
+        });
       }
       return false;
     });
@@ -409,7 +421,6 @@ function App() {
   }, []);
 
   const formatPropertySection = (title: string, data: any, icon: React.ReactNode) => {
-    // Enhanced null/undefined checking
     if (!data || typeof data !== 'object' || Object.keys(data).length === 0) return null;
 
     return (
@@ -421,11 +432,13 @@ function App() {
           <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Object.entries(data).map(([key, value]) => {
-            // Safe value rendering
+          {Object.entries(data).map(([key, field]) => {
+            const value = field?.value;
             let displayValue = 'Not available';
-            if (value !== null && value !== undefined) {
-              if (typeof value === 'object') {
+            if (value !== null && value !== undefined && value !== '<UNKNOWN>') {
+              if (Array.isArray(value)) {
+                displayValue = value.join(', ');
+              } else if (typeof value === 'object') {
                 try {
                   displayValue = JSON.stringify(value, null, 2);
                 } catch (err) {
@@ -435,7 +448,7 @@ function App() {
                 displayValue = String(value);
               }
             }
-            
+
             return (
               <div key={key} className="bg-gray-50 p-3 rounded-lg">
                 <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
@@ -453,22 +466,22 @@ function App() {
   };
 
   const renderSection = (key: SectionKey, section: SectionData | null) => {
-    const required = section?.required === true;
-    const fields = section ? Object.entries(section).filter(([k]) => k !== 'required') : [];
+    const fields = section ? Object.entries(section) : [];
 
     return (
       <details key={key} className="bg-white rounded-xl shadow-sm border border-gray-200">
         <summary className="cursor-pointer px-6 py-4 flex justify-between items-center">
-          <span className="font-semibold text-gray-900">
-            {sectionTitles[key]} {required && <span className="text-red-500">*</span>}
-          </span>
+          <span className="font-semibold text-gray-900">{sectionTitles[key]}</span>
         </summary>
         {fields.length > 0 && (
           <div className="px-6 pb-6 pt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {fields.map(([fieldKey, value]) => {
+            {fields.map(([fieldKey, field]) => {
+              const value = field.value;
+              const required = field.required;
               const isEmpty =
                 value === null ||
                 value === '' ||
+                value === '<UNKNOWN>' ||
                 (Array.isArray(value) && value.length === 0);
 
               const commonProps = {
@@ -526,7 +539,7 @@ function App() {
               }
 
               let inputType: string = 'text';
-              let inputValue: any = value ?? '';
+              let inputValue: any = value === '<UNKNOWN>' ? '' : value ?? '';
               if (typeof value === 'number') {
                 inputType = 'number';
               } else if (typeof value === 'string' && !isNaN(Date.parse(value))) {
