@@ -61,12 +61,16 @@ function App() {
       .replace(/^./, s => s.toUpperCase());
 
   const parsePropertyData = (raw: any): PropertyData => {
+    const listingData =
+      raw?.propertyData && typeof raw.propertyData === 'object'
+        ? raw.propertyData
+        : raw?.listingData && typeof raw.listingData === 'object'
+        ? raw.listingData
+        : {};
+
     return {
       propertyType: raw?.propertyType || 'Residential',
-      listingData:
-        raw?.listingData && typeof raw.listingData === 'object'
-          ? raw.listingData
-          : {},
+      listingData,
       _receivedAt: raw?._receivedAt ?? null,
     };
   };
