@@ -397,12 +397,16 @@ function App() {
   }, []);
   const renderFields = (section: any, path: string[]): JSX.Element[] => {
     return Object.entries(section).map(([fieldKey, fieldValue]) => {
-      if (fieldValue && typeof fieldValue === 'object' && !('value' in fieldValue)) {
+      const keyPath = path.concat(fieldKey).join('.');
+
+      if (
+        fieldValue &&
+        typeof fieldValue === 'object' &&
+        !Array.isArray(fieldValue) &&
+        !('value' in fieldValue)
+      ) {
         return (
-          <div
-            key={path.concat(fieldKey).join('.')}
-            className="col-span-1 md:col-span-2"
-          >
+          <div key={keyPath} className="col-span-1 md:col-span-2">
             <h4 className="text-md font-semibold text-gray-900 mt-2">
               {humanize(fieldKey)}
             </h4>
@@ -413,81 +417,24 @@ function App() {
         );
       }
 
-      const field: ListingField = fieldValue || {};
-      const value = field.value;
-      const required = field.required;
-      const isEmpty =
-        value === null ||
-        value === undefined ||
-        value === '' ||
-        value === '<UNKNOWN>' ||
-        (Array.isArray(value) && value.length === 0);
+      const rawValue =
+        fieldValue && typeof fieldValue === 'object' && 'value' in fieldValue
+          ? (fieldValue as ListingField).value
+          : fieldValue;
 
-      let displayValue: any = '';
-      if (Array.isArray(value)) displayValue = value.join(', ');
-      else if (typeof value === 'boolean') displayValue = value ? 'Yes' : 'No';
-      else displayValue = value ?? '';
-
-      const commonProps = {
-        className: `w-full border rounded-lg p-2 ${
-          required && isEmpty ? 'border-red-500' : 'border-gray-300'
-        }`,
-      };
-
-      const label = (
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {humanize(fieldKey)}
-          {required && <span className="text-red-500">*</span>}
-        </label>
-      );
-
-      if (typeof value === 'boolean') {
-        return (
-          <div key={path.concat(fieldKey).join('.')}> 
-            {label}
-            <select
-              value={value ? 'true' : 'false'}
-              onChange={e =>
-                handleFieldChange(path.concat(fieldKey), e.target.value === 'true')
-              }
-              {...commonProps}
-            >
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
-          </div>
-        );
-      }
-
-      const inputType = typeof value === 'number' ? 'number' : 'text';
+      let displayValue = '';
+      if (Array.isArray(rawValue)) displayValue = rawValue.join(', ');
+      else if (typeof rawValue === 'boolean') displayValue = rawValue ? 'Yes' : 'No';
+      else if (rawValue !== null && rawValue !== undefined)
+        displayValue = String(rawValue);
 
       return (
-        <div key={path.concat(fieldKey).join('.')}> 
-          {label}
-          <div className="flex items-center space-x-2">
-            <input
-              type={inputType}
-              value={displayValue}
-              onChange={e => {
-                let newVal: any = e.target.value;
-                if (Array.isArray(value)) {
-                  newVal = e.target.value
-                    .split(',')
-                    .map(v => v.trim())
-                    .filter(v => v.length > 0);
-                } else if (typeof value === 'number') {
-                  newVal = e.target.value === '' ? null : Number(e.target.value);
-                }
-                handleFieldChange(path.concat(fieldKey), newVal);
-              }}
-              {...commonProps}
-            />
-            {(field.unit || field.year) && (
-              <span className="text-sm text-gray-500">
-                {field.unit}
-                {field.year ? ` (${field.year})` : ''}
-              </span>
-            )}
+        <div key={keyPath}>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {humanize(fieldKey)}
+          </label>
+          <div className="text-gray-900">
+            {displayValue === '' ? '-' : displayValue}
           </div>
         </div>
       );
