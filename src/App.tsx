@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Send, CheckCircle, XCircle, Loader2, Clock } from 'lucide-react';
+import { Send, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 
 interface FormData {
   parcelId: string;
@@ -49,7 +49,6 @@ function App() {
 
   const [propertyData, setPropertyData] = useState<PropertyData | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
-  const [isWaitingForResults, setIsWaitingForResults] = useState(false);
   const [history, setHistory] = useState<Array<{ id: string; createdAt: number; parcelId?: string; county?: string; state?: string; summary?: string }>>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentRequestId, setCurrentRequestId] = useState<string | null>(null);
@@ -188,8 +187,7 @@ function App() {
       error: null,
       success: false
     });
-    
-    setIsWaitingForResults(true);
+
     setPropertyData(null);
     setSelectedId(null);
 
@@ -244,7 +242,6 @@ function App() {
         error: error instanceof Error ? error.message : 'An unexpected error occurred',
         success: false
       });
-      setIsWaitingForResults(false);
     }
   };
 
@@ -256,7 +253,6 @@ function App() {
         await fetch('/api/webhook-response', { method: 'DELETE' });
       }
       setPropertyData(null);
-      setIsWaitingForResults(false);
       setSelectedId(null);
       setCurrentRequestId(null);
       setDataError(null);
@@ -279,17 +275,27 @@ function App() {
           safeData = data;
         }
         setPropertyData(parsePropertyData(safeData));
-        setIsWaitingForResults(false);
       }
     } catch (error) {
       console.error('Error refreshing results:', error);
-      setIsWaitingForResults(false);
     }
   };
 
   const fetchHistory = async () => {
     const data = await getJSON('/api/history');
-    if (Array.isArray(data)) setHistory(data);
+    if (Array.isArray(data)) {
+      const normalized = data.map((item: any) => {
+        const payload = item.payload || {};
+        return {
+          ...item,
+          id: item.id ?? item._id,
+          parcelId: item.parcelId ?? payload.parcelId ?? payload.formData?.parcelId,
+          county: item.county ?? payload.county ?? payload.formData?.county,
+          state: item.state ?? payload.state ?? payload.formData?.state,
+        };
+      });
+      setHistory(normalized);
+    }
   };
 
   const handleViewHistory = async (id: string) => {
@@ -308,7 +314,6 @@ function App() {
 
         setPropertyData(parsePropertyData(safePayload));
         setSelectedId(id);
-        setIsWaitingForResults(false);
         setCurrentRequestId(null);
       } else {
         console.warn('No payload found in history data:', data);
@@ -319,7 +324,6 @@ function App() {
       setPropertyData(null);
       setDataError('Failed to load historical data');
       setSelectedId(id);
-      setIsWaitingForResults(false);
       setCurrentRequestId(null);
     }
   };
@@ -338,11 +342,11 @@ function App() {
     const checkForResults = async () => {
       const id = currentRequestId;
       if (!id) return;
-      
+
       try {
         const data = await getJSON(`/api/webhook-response?requestId=${encodeURIComponent(id)}`);
         if (id !== currentRequestId) return; // request changed while fetching
-        
+
         if (data && Object.keys(data).length > 0) {
           let safeData;
           try {
@@ -352,21 +356,16 @@ function App() {
             safeData = data;
           }
           setPropertyData(parsePropertyData(safeData));
-          setIsWaitingForResults(false);
         }
       } catch (error) {
         console.error('Error checking for results:', error);
-        if (id === currentRequestId) {
-          setIsWaitingForResults(false);
-        }
       }
     };
 
-    let interval: NodeJS.Timeout;
-    if (isWaitingForResults && currentRequestId) {
-      checkForResults();
-      interval = setInterval(checkForResults, 3000);
-    }
+    if (!currentRequestId || propertyData) return;
+
+    checkForResults();
+    const interval = setInterval(checkForResults, 3000);
 
     const onVisibility = () => {
       if (!document.hidden) {
@@ -376,10 +375,10 @@ function App() {
     document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
-      if (interval) clearInterval(interval);
+      clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [isWaitingForResults, currentRequestId]);
+  }, [currentRequestId, propertyData]);
 
   useEffect(() => {
     const load = () => {
@@ -660,24 +659,6 @@ function App() {
         </div>
 
         {/* Property Data Results */}
-        {isWaitingForResults && (
-          <div className="mt-8 bg-white shadow-xl rounded-2xl p-8 border border-gray-100">
-            <div className="text-center">
-              <div className="flex items-center justify-center mb-4">
-                <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">Processing Property Research</h2>
-              <p className="text-gray-600">
-                Our system is gathering comprehensive property data. This may take a few minutes...
-              </p>
-              <div className="mt-4 flex items-center justify-center space-x-2 text-sm text-gray-500">
-                <Clock className="w-4 h-4" />
-                <span>Estimated time: 5-10 minutes</span>
-              </div>
-            </div>
-          </div>
-        )}
-
         {dataError && !propertyData && (
           <div className="mt-8 text-red-600">{dataError}</div>
         )}
