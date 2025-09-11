@@ -49,7 +49,7 @@ function App() {
 
   const [propertyData, setPropertyData] = useState<PropertyData | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
-  const [history, setHistory] = useState<Array<{ id: string; createdAt: number; parcelId?: string; county?: string; state?: string; summary?: string }>>([]);
+  const [history, setHistory] = useState<Array<{ id: string; createdAt: number; parcelId?: string; county?: string; state?: string }>>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentRequestId, setCurrentRequestId] = useState<string | null>(null);
 
@@ -286,12 +286,13 @@ function App() {
     if (Array.isArray(data)) {
       const normalized = data.map((item: any) => {
         const payload = item.payload || {};
+        const formData = payload.formData || {};
         return {
           ...item,
           id: item.id ?? item._id,
-          parcelId: item.parcelId ?? payload.parcelId ?? payload.formData?.parcelId,
-          county: item.county ?? payload.county ?? payload.formData?.county,
-          state: item.state ?? payload.state ?? payload.formData?.state,
+          parcelId: item.parcelId ?? payload.parcelId ?? formData.parcelId,
+          county: item.county ?? payload.county ?? formData.county,
+          state: item.state ?? payload.state ?? formData.state,
         };
       });
       setHistory(normalized);
@@ -635,7 +636,6 @@ function App() {
                     <th className="px-2 py-1">Date/Time</th>
                     <th className="px-2 py-1">Parcel ID</th>
                     <th className="px-2 py-1">County/State</th>
-                    <th className="px-2 py-1">Summary</th>
                     <th className="px-2 py-1">Actions</th>
                   </tr>
                 </thead>
@@ -645,7 +645,6 @@ function App() {
                       <td className="px-2 py-1">{new Date(item.createdAt).toLocaleString()}</td>
                       <td className="px-2 py-1">{item.parcelId || '-'}</td>
                       <td className="px-2 py-1">{[item.county, item.state].filter(Boolean).join(', ')}</td>
-                      <td className="px-2 py-1">{item.summary || '-'}</td>
                       <td className="px-2 py-1 space-x-2">
                         <button onClick={() => handleViewHistory(item.id)} className="text-blue-600 hover:underline">View</button>
                         <button onClick={() => handleDeleteHistory(item.id)} className="text-red-600 hover:underline">Delete</button>
