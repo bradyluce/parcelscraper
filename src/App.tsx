@@ -16,18 +16,127 @@ interface FormState {
   success: boolean;
 }
 
+interface PropertyInformation {
+  propertySubType?: string;
+  propertyAttachedYn?: string;
+  listingAgreementType?: string;
+  transactionType?: string;
+  forLeaseMlsNumber?: string;
+  adultCommunityYn?: string;
+  willSubdivideYn?: string;
+  accessoryUnitYn?: string;
+  accessoryUnitSqFt?: number;
+  accessoryUnitType?: string;
+  architecturalStyle?: string;
+  "yearBuiltDetails/constructionStatus"?: string;
+  listPrice?: number;
+  listDate?: string;
+  expireDate?: string;
+  yearBuilt?: number;
+  yearBuiltSource?: string;
+  livingArea?: number;
+  livingAreaSource?: string;
+  parcelId?: string;
+  additionalParcelId?: string;
+  multiParcelIdYn?: string;
+  housingType?: string;
+  constructionMaterial?: string;
+}
 
-interface ListingField {
-  value?: any;
-  required?: boolean;
-  unit?: string;
-  year?: number;
-  [key: string]: any;
+interface LocationSchoolInfo {
+  streetBoxNumber?: string;
+  streetDirPrefix?: string;
+  streetName?: string;
+  streetType?: string;
+  streetDirSuffix?: string;
+  unitNumber?: string;
+  state?: string;
+  countyParish?: string;
+  city?: string;
+  zip?: string;
+  zipPlus4?: string;
+  country?: string;
+  lot?: string;
+  tax?: string;
+  block?: string;
+  subdivision?: string;
+  plannedDevelopment?: string;
+  additionalLegalDescription?: string;
+  schoolDistrict?: string;
+  elementarySchoolName?: string;
+  juniorHighSchoolName?: string;
+  seniorHighSchoolName?: string;
+  primarySchoolName?: string;
+  middleSchoolName?: string;
+  intermediateSchoolName?: string;
+  lakeName?: string;
+}
+
+interface RoomDetails {
+  bedrooms?: number;
+  fullBaths?: number;
+  halfBaths?: number;
+  levels?: number;
+  livingAreas?: number;
+  diningAreas?: number;
+  kitchenDetails?: Record<string, any>;
+  utilityRoomDetails?: Record<string, any>;
+  additionalRooms?: any[];
+}
+
+interface FeaturesInfo {
+  accessibilityFeaturesYn?: string;
+  accessibilityFeatures?: any[];
+  interiorFeatures?: any[];
+  smartHomeFeaturesYn?: string;
+  poolYn?: string;
+  basementYn?: string;
+  fireplaces?: number;
+  appliances?: any[];
+  carportSpaces?: number;
+  garageSpaces?: number;
+  coveredSpaces?: number;
+  garageYn?: string;
+}
+
+interface LotInfo {
+  lotSizeArea?: number;
+  lotDimensions?: string;
+  lotSizeAcreage?: string;
+  lotSizeUnit?: string;
+  lotSizeSource?: string;
+  easements?: string;
+  waterfrontYn?: string;
+  waterfrontFeatures?: any[];
+  horsePermittedYn?: string;
+  lotFeatures?: any[];
+  fenceType?: any[];
+  lakePumpYn?: string;
+  otherStructures?: any[];
+  exteriorFeatures?: any[];
+  soil?: string;
+  plattedWaterfrontBoundary?: string;
+  restrictions?: any[];
+  vegetation?: any[];
+  dockPermittedYn?: string;
+}
+
+interface UtilityInfo {
+  streetUtilities?: any[];
+}
+
+interface ListingData {
+  PropertyInformation: PropertyInformation;
+  LocationSchoolInfo: LocationSchoolInfo;
+  RoomDetails: RoomDetails;
+  FeaturesInfo: FeaturesInfo;
+  LotInfo: LotInfo;
+  UtilityInfo: UtilityInfo;
 }
 
 interface PropertyData {
   propertyType: string;
-  listingData: Record<string, any>;
+  listingData: ListingData;
   _receivedAt?: string | null;
 }
 
@@ -59,65 +168,165 @@ function App() {
       .replace(/[_-]/g, ' ')
       .replace(/^./, s => s.toUpperCase());
 
-  const parsePropertyData = (raw: any): PropertyData => {
-    const listingData =
-      raw?.propertyData && typeof raw.propertyData === 'object'
-        ? raw.propertyData
-        : raw?.listingData && typeof raw.listingData === 'object'
-        ? raw.listingData
-        : {};
+  const PROPERTY_INFORMATION_FIELDS = [
+    'propertySubType',
+    'propertyAttachedYn',
+    'listingAgreementType',
+    'transactionType',
+    'forLeaseMlsNumber',
+    'adultCommunityYn',
+    'willSubdivideYn',
+    'accessoryUnitYn',
+    'accessoryUnitSqFt',
+    'accessoryUnitType',
+    'architecturalStyle',
+    'yearBuiltDetails/constructionStatus',
+    'listPrice',
+    'listDate',
+    'expireDate',
+    'yearBuilt',
+    'yearBuiltSource',
+    'livingArea',
+    'livingAreaSource',
+    'parcelId',
+    'additionalParcelId',
+    'multiParcelIdYn',
+    'housingType',
+    'constructionMaterial',
+  ];
 
+  const LOCATION_SCHOOL_FIELDS = [
+    'streetBoxNumber',
+    'streetDirPrefix',
+    'streetName',
+    'streetType',
+    'streetDirSuffix',
+    'unitNumber',
+    'state',
+    'countyParish',
+    'city',
+    'zip',
+    'zipPlus4',
+    'country',
+    'lot',
+    'tax',
+    'block',
+    'subdivision',
+    'plannedDevelopment',
+    'additionalLegalDescription',
+    'schoolDistrict',
+    'elementarySchoolName',
+    'juniorHighSchoolName',
+    'seniorHighSchoolName',
+    'primarySchoolName',
+    'middleSchoolName',
+    'intermediateSchoolName',
+    'lakeName',
+  ];
+
+  const ROOM_DETAILS_FIELDS = [
+    'bedrooms',
+    'fullBaths',
+    'halfBaths',
+    'levels',
+    'livingAreas',
+    'diningAreas',
+    'kitchenDetails',
+    'utilityRoomDetails',
+    'additionalRooms',
+  ];
+
+  const FEATURES_INFO_FIELDS = [
+    'accessibilityFeaturesYn',
+    'accessibilityFeatures',
+    'interiorFeatures',
+    'smartHomeFeaturesYn',
+    'poolYn',
+    'basementYn',
+    'fireplaces',
+    'appliances',
+    'carportSpaces',
+    'garageSpaces',
+    'coveredSpaces',
+    'garageYn',
+  ];
+
+  const LOT_INFO_FIELDS = [
+    'lotSizeArea',
+    'lotDimensions',
+    'lotSizeAcreage',
+    'lotSizeUnit',
+    'lotSizeSource',
+    'easements',
+    'waterfrontYn',
+    'waterfrontFeatures',
+    'horsePermittedYn',
+    'lotFeatures',
+    'fenceType',
+    'lakePumpYn',
+    'otherStructures',
+    'exteriorFeatures',
+    'soil',
+    'plattedWaterfrontBoundary',
+    'restrictions',
+    'vegetation',
+    'dockPermittedYn',
+  ];
+
+  const UTILITY_INFO_FIELDS = ['streetUtilities'];
+
+  const LISTING_SECTIONS: (keyof ListingData)[] = [
+    'PropertyInformation',
+    'LocationSchoolInfo',
+    'RoomDetails',
+    'FeaturesInfo',
+    'LotInfo',
+    'UtilityInfo',
+  ];
+
+  const pickFields = (obj: any, fields: string[]) => {
+    const result: any = {};
+    for (const field of fields) {
+      if (obj && obj[field] !== undefined) {
+        result[field] = obj[field];
+      }
+    }
+    return result;
+  };
+
+  const parsePropertyData = (raw: any): PropertyData => {
+    const listing = raw?.listingData ?? {};
     return {
       propertyType: raw?.propertyType || 'Residential',
-      listingData,
+      listingData: {
+        PropertyInformation: pickFields(
+          listing.PropertyInformation ?? {},
+          PROPERTY_INFORMATION_FIELDS,
+        ),
+        LocationSchoolInfo: pickFields(
+          listing.LocationSchoolInfo ?? {},
+          LOCATION_SCHOOL_FIELDS,
+        ),
+        RoomDetails: pickFields(
+          listing.RoomDetails ?? {},
+          ROOM_DETAILS_FIELDS,
+        ),
+        FeaturesInfo: pickFields(
+          listing.FeaturesInfo ?? {},
+          FEATURES_INFO_FIELDS,
+        ),
+        LotInfo: pickFields(listing.LotInfo ?? {}, LOT_INFO_FIELDS),
+        UtilityInfo: pickFields(
+          listing.UtilityInfo ?? {},
+          UTILITY_INFO_FIELDS,
+        ),
+      },
       _receivedAt: raw?._receivedAt ?? null,
     };
   };
 
-  const handleFieldChange = (path: string[], value: any) => {
-    setPropertyData(prev => {
-      if (!prev) return prev;
-      const listingData: any = { ...prev.listingData };
-      let current: any = listingData;
-      for (let i = 0; i < path.length - 1; i++) {
-        const key = path[i];
-        current[key] = { ...(current[key] as any) };
-        current = current[key];
-      }
-      const lastKey = path[path.length - 1];
-      const field: ListingField = current[lastKey]
-        ? { ...(current[lastKey] as ListingField), value }
-        : { value, required: false };
-      current[lastKey] = field;
-      return { ...prev, listingData };
-    });
-  };
-
-  const hasMissingRequired = (section: any): boolean =>
-    Object.values(section).some((field: any) => {
-      if (field && typeof field === 'object') {
-        if ('value' in field) {
-          const v = field.value;
-          return (
-            field.required &&
-            (v === null ||
-              v === '' ||
-              v === '<UNKNOWN>' ||
-              (Array.isArray(v) && v.length === 0))
-          );
-        }
-        return hasMissingRequired(field);
-      }
-      return false;
-    });
-
   const handlePropertyDataSubmit = async () => {
     if (!propertyData) return;
-
-    if (hasMissingRequired(propertyData.listingData)) {
-      setDataError('Please fill out all required fields.');
-      return;
-    }
 
     try {
       await fetch('/api/property-data', {
@@ -402,8 +611,7 @@ function App() {
       if (
         fieldValue &&
         typeof fieldValue === 'object' &&
-        !Array.isArray(fieldValue) &&
-        !('value' in fieldValue)
+        !Array.isArray(fieldValue)
       ) {
         return (
           <div key={keyPath} className="col-span-1 md:col-span-2">
@@ -417,16 +625,12 @@ function App() {
         );
       }
 
-      const rawValue =
-        fieldValue && typeof fieldValue === 'object' && 'value' in fieldValue
-          ? (fieldValue as ListingField).value
-          : fieldValue;
-
       let displayValue = '';
-      if (Array.isArray(rawValue)) displayValue = rawValue.join(', ');
-      else if (typeof rawValue === 'boolean') displayValue = rawValue ? 'Yes' : 'No';
-      else if (rawValue !== null && rawValue !== undefined)
-        displayValue = String(rawValue);
+      if (Array.isArray(fieldValue)) displayValue = fieldValue.join(', ');
+      else if (typeof fieldValue === 'boolean')
+        displayValue = fieldValue ? 'Yes' : 'No';
+      else if (fieldValue !== null && fieldValue !== undefined)
+        displayValue = String(fieldValue);
 
       return (
         <div key={keyPath}>
@@ -677,8 +881,8 @@ function App() {
               <div className="text-red-600 mb-4">{dataError}</div>
             )}
             <div className="space-y-4">
-              {Object.entries(propertyData.listingData).map(([key, section]) =>
-                renderSection(key, section)
+              {LISTING_SECTIONS.map(key =>
+                renderSection(key as string, propertyData.listingData[key])
               )}
             </div>
             <div className="mt-6 flex flex-col space-y-4">
