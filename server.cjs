@@ -90,7 +90,7 @@ app.post('/api/webhook-response', (req, res) => {
     if (requestId) putInbox(requestId, body);
 
     const item = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
       createdAt: Date.now(),
       requestId,
       parcelId:
@@ -106,7 +106,25 @@ app.post('/api/webhook-response', (req, res) => {
     };
 
     latestPropertyData = body;
-    history.unshift(item);
+
+    if (requestId) {
+      const existingIdx = history.findIndex(entry => entry.requestId === requestId);
+      if (existingIdx !== -1) {
+        const existing = history.splice(existingIdx, 1)[0];
+        const updated = {
+          ...existing,
+          ...item,
+          id: existing.id,
+          createdAt: existing.createdAt,
+        };
+        history.unshift(updated);
+      } else {
+        history.unshift(item);
+      }
+    } else {
+      history.unshift(item);
+    }
+
     if (history.length > 100) history = history.slice(0, 100);
     save();
 
