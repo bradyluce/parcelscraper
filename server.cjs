@@ -67,7 +67,11 @@ app.get('/api/health', (_req, res) => json(res, { status: 'ok' }));
 function buildSummary(body) {
   const address = body.address || body.property_basics?.address || body.input?.address;
   const owner = body.owner_information?.owner_name;
-  const parcel = body.parcelId || body.property_basics?.parcel_id || body.input?.parcelId;
+  const parcel =
+    body.parcelId ||
+    body.property_basics?.parcel_id ||
+    body.input?.parcelId ||
+    body.listingData?.PropertyInformation?.parcelId;
   const value = body.assessed_value_info?.current_assessed_value || body.assessed_value_info?.total_value || body.assessed || body.total_value;
   const first = address || owner || parcel || 'Parcel';
   const second = value || 'no value';
@@ -89,7 +93,12 @@ app.post('/api/webhook-response', (req, res) => {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
       createdAt: Date.now(),
       requestId,
-      parcelId: body.parcelId || body.property_basics?.parcel_id || body.input?.parcelId || null,
+      parcelId:
+        body.parcelId ||
+        body.property_basics?.parcel_id ||
+        body.input?.parcelId ||
+        body.listingData?.PropertyInformation?.parcelId ||
+        null,
       county: body.county || body.property_basics?.county || body.input?.county || null,
       state: body.state || body.property_basics?.state || body.input?.state || null,
       summary: buildSummary(body),
